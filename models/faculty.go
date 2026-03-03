@@ -1,5 +1,11 @@
 package models
 
+// Option represents an ID/title pair from the SRM staff-finder dropdowns.
+type Option struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+}
+
 // Faculty holds the scraped data for one faculty member.
 type Faculty struct {
 	Name             string `json:"name"`

@@ -16,9 +16,53 @@ const srmFacultyBase = "https://www.srmist.edu.in/faculty/"
 
 // RegisterRoutes sets up all API routes on the given mux.
 func RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/campuses", handleCampuses)
+	mux.HandleFunc("GET /api/colleges", handleColleges)
+	mux.HandleFunc("GET /api/departments", handleDepartments)
+	mux.HandleFunc("GET /api/department/{id}", handleDepartment)
 	mux.HandleFunc("GET /api/faculty/{slug}", handleFaculty)
 	mux.HandleFunc("GET /api/slug", handleSlug)
 	mux.HandleFunc("GET /faculty/{slug}", handleRedirect)
+}
+
+// handleCampuses returns the list of SRM campuses.
+// GET /api/campuses
+func handleCampuses(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, scraper.Campuses)
+}
+
+// handleColleges returns colleges for a campus.
+// GET /api/colleges?campus_id=78
+func handleColleges(w http.ResponseWriter, r *http.Request) {
+	campusID := r.URL.Query().Get("campus_id")
+	if campusID == "" {
+		writeError(w, http.StatusBadRequest, "missing 'campus_id' query parameter")
+		return
+	}
+
+	colleges, err := scraper.FetchColleges(campusID)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to fetch colleges: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, colleges)
+}
+
+// handleDepartments returns departments for a college.
+// GET /api/departments?college_id=9812
+func handleDepartments(w http.ResponseWriter, r *http.Request) {
+	collegeID := r.URL.Query().Get("college_id")
+	if collegeID == "" {
+		writeError(w, http.StatusBadRequest, "missing 'college_id' query parameter")
+		return
+	}
+
+	depts, err := scraper.FetchDepartments(collegeID)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to fetch departments: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, depts)
 }
 
 // handleFaculty scrapes a single faculty profile and returns full JSON.
@@ -41,6 +85,30 @@ func handleFaculty(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, faculty)
 }
 
+// handleDepartment returns faculty slugs for a department.
+// GET /api/department/{id}   (id = WordPress taxonomy ID, e.g. 13519)
+func handleDepartment(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "missing department id")
+		return
+	}
+
+	log.Printf("Fetching faculty slugs for department ID: %s", id)
+	slugs, err := scraper.ScrapeDepartmentSlugs(id)
+	if err != nil {
+		log.Printf("Error fetching department %s: %v", id, err)
+		writeError(w, http.StatusBadGateway, "failed to fetch department: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"department_id": id,
+		"count":         len(slugs),
+		"slugs":         slugs,
+	})
+}
+
 // handleRedirect redirects to the faculty's profile page on the SRM website.
 // GET /faculty/{slug}
 func handleRedirect(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +122,7 @@ func handleRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSlug converts a faculty name to a URL-friendly slug.
-// GET /api/slug?name=Dr. Ganapathy Sankar U
+// GET /api/slug?name={name}
 func handleSlug(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {

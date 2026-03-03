@@ -19,12 +19,16 @@ func main() {
 	api.RegisterRoutes(mux)
 
 	addr := ":" + port
-	fmt.Printf("Faculty API server starting on http://localhost%s\n", addr)
+	fmt.Printf("API server starting on http://localhost%s\n", addr)
 	fmt.Println()
 	fmt.Println("Endpoints:")
-	fmt.Println("  GET /api/faculty/{slug}   → faculty profile JSON")
-	fmt.Println("  GET /api/slug?name=       → convert name to slug")
-	fmt.Println("  GET /faculty/{slug}       → redirect to SRM profile page")
+	fmt.Println("  GET /api/campuses                → list campuses")
+	fmt.Println("  GET /api/colleges?campus_id=     → list colleges for a campus")
+	fmt.Println("  GET /api/departments?college_id= → list departments for a college")
+	fmt.Println("  GET /api/department/{id}         → faculty slugs in a department")
+	fmt.Println("  GET /api/faculty/{slug}          → full faculty profile JSON")
+	fmt.Println("  GET /api/slug?name=              → convert name to slug")
+	fmt.Println("  GET /faculty/{slug}              → redirect to SRM profile page")
 	fmt.Println()
 
 	if err := http.ListenAndServe(addr, mux); err != nil {

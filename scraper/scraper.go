@@ -1,7 +1,13 @@
 package scraper
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,10 +18,10 @@ import (
 const (
 	userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
 	baseURL   = "https://www.srmist.edu.in"
+	ajaxURL   = baseURL + "/wp-admin/admin-ajax.php"
 )
 
 // ScrapeProfile fetches a single faculty profile by slug.
-// slug example: "dr-ganapathy-sankar-u"
 func ScrapeProfile(slug string) (*models.Faculty, error) {
 	profileURL := baseURL + "/faculty/" + slug + "/"
 	var faculty *models.Faculty
@@ -52,6 +58,113 @@ func ScrapeProfile(slug string) (*models.Faculty, error) {
 		return nil, fmt.Errorf("no faculty data found at %s", profileURL)
 	}
 	return faculty, nil
+}
+
+// Campuses is the static list of SRM campuses (these don't change).
+var Campuses = []models.Option{
+	{ID: 408, Title: "Baburayanpettai Campus"},
+	{ID: 84, Title: "Delhi - NCR"},
+	{ID: 78, Title: "Kattankulathur - Chennai"},
+	{ID: 81, Title: "Ramapuram - Chennai"},
+	{ID: 83, Title: "Tiruchirappalli"},
+	{ID: 82, Title: "Vadapalani - Chennai"},
+}
+
+// FetchColleges returns the colleges for a given campus ID via the SRM AJAX API.
+func FetchColleges(campusID string) ([]models.Option, error) {
+	return fetchOptions("filter_college_list", "campus", campusID, "college")
+}
+
+// FetchDepartments returns the departments for a given college ID via the SRM AJAX API.
+func FetchDepartments(collegeID string) ([]models.Option, error) {
+	return fetchOptions("filter_department_list", "college", collegeID, "department")
+}
+
+// fetchOptions calls an SRM AJAX action and parses the response into Options.
+func fetchOptions(action, paramName, paramValue, resultKey string) ([]models.Option, error) {
+	data := url.Values{
+		"action":  {action},
+		paramName: {paramValue},
+	}
+
+	resp, err := http.Post(ajaxURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	var items []struct {
+		ID    int    `json:"ID"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(raw[resultKey], &items); err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", resultKey, err)
+	}
+
+	opts := make([]models.Option, len(items))
+	for i, item := range items {
+		opts[i] = models.Option{ID: item.ID, Title: item.Title}
+	}
+	return opts, nil
+}
+
+var facultyLinkRe = regexp.MustCompile(`href="https://www\.srmist\.edu\.in/faculty/([^"/]+)/"`)
+
+// ScrapeDepartmentSlugs discovers all faculty slugs in a department via the
+// SRM staff-finder AJAX endpoint. Returns only slugs — use ScrapeProfile
+// to get the full details for each.
+func ScrapeDepartmentSlugs(departmentID string) ([]string, error) {
+	seen := make(map[string]bool)
+	var slugs []string
+
+	for page := 1; ; page++ {
+		body, err := fetchStaffPage(departmentID, page)
+		if err != nil {
+			return nil, fmt.Errorf("ajax page %d: %w", page, err)
+		}
+
+		matches := facultyLinkRe.FindAllStringSubmatch(body, -1)
+		if len(matches) == 0 {
+			break
+		}
+
+		for _, m := range matches {
+			slug := m[1]
+			if !seen[slug] {
+				seen[slug] = true
+				slugs = append(slugs, slug)
+			}
+		}
+		log.Printf("Department %s page %d: %d slugs so far", departmentID, page, len(slugs))
+	}
+
+	return slugs, nil
+}
+
+// fetchStaffPage calls the SRM staff-finder AJAX endpoint for one page.
+func fetchStaffPage(departmentID string, page int) (string, error) {
+	data := url.Values{
+		"action":   {"list_faculties_default"},
+		"page":     {strconv.Itoa(page)},
+		"formData": {"department=" + departmentID},
+	}
+
+	resp, err := http.Post(ajaxURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // parseProfile extracts Faculty data from a profile page's root HTML element.
