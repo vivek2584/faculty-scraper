@@ -4,114 +4,54 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/vivek2584/faculty-scraper/models"
 )
 
-const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+const (
+	userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+	baseURL   = "https://www.srmist.edu.in"
+)
 
-// Scrape fetches faculty data from the given URL.
-// It automatically detects whether the URL points to a single faculty profile
-// or a department listing page and scrapes accordingly.
-func Scrape(startURL string) ([]models.Faculty, error) {
-	var (
-		faculties []models.Faculty
-		mu       sync.Mutex
-		errs     []string
-	)
+// ScrapeProfile fetches a single faculty profile by slug.
+// slug example: "dr-ganapathy-sankar-u"
+func ScrapeProfile(slug string) (*models.Faculty, error) {
+	profileURL := baseURL + "/faculty/" + slug + "/"
+	var faculty *models.Faculty
+	var scrapeErr error
 
-	// ── Collector for individual faculty profile pages ──────────────
-	profileCollector := colly.NewCollector(
+	c := colly.NewCollector(
 		colly.AllowedDomains("www.srmist.edu.in"),
 	)
 
-	profileCollector.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: 1,
-		Delay:       2 * time.Second,
-	})
-
-	profileCollector.OnRequest(func(r *colly.Request) {
+	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("User-Agent", userAgent)
-		fmt.Printf("  → Scraping profile: %s\n", r.URL.String())
 	})
 
-	profileCollector.OnError(func(r *colly.Response, err error) {
-		mu.Lock()
-		errs = append(errs, fmt.Sprintf("error scraping %s: %v", r.Request.URL, err))
-		mu.Unlock()
-		fmt.Printf("  ✗ Error scraping %s: %v\n", r.Request.URL, err)
+	c.OnError(func(r *colly.Response, err error) {
+		scrapeErr = fmt.Errorf("failed to fetch %s: %w", r.Request.URL, err)
 	})
 
-	profileCollector.OnHTML("html", func(e *colly.HTMLElement) {
+	c.OnHTML("html", func(e *colly.HTMLElement) {
 		f := parseProfile(e)
 		if f.Name != "" {
-			mu.Lock()
-			faculties = append(faculties, f)
-			mu.Unlock()
-			fmt.Printf("  ✓ Found: %s | %s\n", f.Name, f.Designation)
+			faculty = &f
 		}
 	})
 
-	// ── Main collector for department/listing pages ─────────────────
-	mainCollector := colly.NewCollector(
-		colly.AllowedDomains("www.srmist.edu.in"),
-	)
-
-	mainCollector.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: 1,
-		Delay:       2 * time.Second,
-	})
-
-	mainCollector.OnRequest(func(r *colly.Request) {
-		r.Headers.Set("User-Agent", userAgent)
-		fmt.Printf("Visiting: %s\n", r.URL.String())
-	})
-
-	mainCollector.OnError(func(r *colly.Response, err error) {
-		mu.Lock()
-		errs = append(errs, fmt.Sprintf("error visiting %s: %v", r.Request.URL, err))
-		mu.Unlock()
-		fmt.Printf("Error: %s - %v\n", r.Request.URL, err)
-	})
-
-	// Discover faculty profile links on department pages.
-	mainCollector.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		link := e.Attr("href")
-		absURL := e.Request.AbsoluteURL(link)
-
-		if strings.Contains(absURL, "/faculty/") && !strings.HasSuffix(absURL, "/faculty/") {
-			profileCollector.Visit(absURL)
-		}
-	})
-
-	// ── Dispatch ────────────────────────────────────────────────────
-	if isSingleProfile(startURL) {
-		fmt.Println("Mode: Single faculty profile")
-		profileCollector.Visit(startURL)
-	} else {
-		fmt.Println("Mode: Department page → discovering faculty profiles...")
-		mainCollector.Visit(startURL)
+	if err := c.Visit(profileURL); err != nil {
+		return nil, fmt.Errorf("failed to visit %s: %w", profileURL, err)
 	}
+	c.Wait()
 
-	mainCollector.Wait()
-	profileCollector.Wait()
-
-	if len(errs) > 0 {
-		return faculties, fmt.Errorf("encountered %d error(s): %s", len(errs), strings.Join(errs, "; "))
+	if scrapeErr != nil {
+		return nil, scrapeErr
 	}
-
-	return faculties, nil
-}
-
-// isSingleProfile returns true when the URL points to a specific faculty
-// member rather than a department listing.
-func isSingleProfile(url string) bool {
-	return strings.Contains(url, "/faculty/") && !strings.HasSuffix(url, "/faculty/")
+	if faculty == nil {
+		return nil, fmt.Errorf("no faculty data found at %s", profileURL)
+	}
+	return faculty, nil
 }
 
 // parseProfile extracts Faculty data from a profile page's root HTML element.

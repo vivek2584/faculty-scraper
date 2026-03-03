@@ -2,43 +2,23 @@ package models
 
 // Faculty holds the scraped data for one faculty member.
 type Faculty struct {
-	Name               string
-	Designation        string
-	Department         string
-	Phone              string
-	Email              string
-	Campus             string
-	Experience         string
-	ResearchInterest   string
-	Courses            string
-	Education          string
-	Publications       string
-	Awards             string
-	Workshops          string
-	WorkExperience     string
-	Memberships        string
-	Responsibilities   string
-	ProfileURL         string
+	Name             string `json:"name"`
+	Designation      string `json:"designation"`
+	Department       string `json:"department"`
+	Phone            string `json:"phone,omitempty"`
+	Email            string `json:"email,omitempty"`
+	Campus           string `json:"campus"`
+	Experience       string `json:"experience,omitempty"`
+	ResearchInterest string `json:"research_interest,omitempty"`
+	Courses          string `json:"courses,omitempty"`
+	Education        string `json:"education,omitempty"`
+	Publications     string `json:"publications,omitempty"`
+	Awards           string `json:"awards,omitempty"`
+	Workshops        string `json:"workshops,omitempty"`
+	WorkExperience   string `json:"work_experience,omitempty"`
+	Memberships      string `json:"memberships,omitempty"`
+	Responsibilities string `json:"responsibilities,omitempty"`
+	ProfileURL       string `json:"profile_url"`
 }
 
-// CSVHeaders returns the column headers for CSV export.
-func CSVHeaders() []string {
-	return []string{
-		"Name", "Designation", "Department", "Phone", "Email",
-		"Campus", "Experience", "Research Interest", "Courses",
-		"Education", "Publications", "Awards",
-		"Workshops/Seminars/Conferences", "Work Experience",
-		"Memberships", "Responsibilities", "Profile URL",
-	}
-}
 
-// ToRow converts a Faculty to a CSV row.
-func (f *Faculty) ToRow() []string {
-	return []string{
-		f.Name, f.Designation, f.Department, f.Phone, f.Email,
-		f.Campus, f.Experience, f.ResearchInterest, f.Courses,
-		f.Education, f.Publications, f.Awards,
-		f.Workshops, f.WorkExperience,
-		f.Memberships, f.Responsibilities, f.ProfileURL,
-	}
-}
