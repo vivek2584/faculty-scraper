@@ -24,6 +24,7 @@ type Faculty struct {
 	WorkExperience   string `json:"work_experience,omitempty"`
 	Memberships      string `json:"memberships,omitempty"`
 	Responsibilities string `json:"responsibilities,omitempty"`
+	ImageURL         string `json:"image_url,omitempty"`
 	ProfileURL       string `json:"profile_url"`
 }
 

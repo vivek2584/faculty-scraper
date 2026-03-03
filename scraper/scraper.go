@@ -114,6 +114,7 @@ func fetchOptions(action, paramName, paramValue, resultKey string) ([]models.Opt
 }
 
 var facultyLinkRe = regexp.MustCompile(`href="https://www\.srmist\.edu\.in/faculty/([^"/]+)/"`)
+var featuredImageRe = regexp.MustCompile(`"featuredImage":"([^"]+)"`)
 
 // ScrapeDepartmentSlugs discovers all faculty slugs in a department via the
 // SRM staff-finder AJAX endpoint. Returns only slugs — use ScrapeProfile
@@ -177,6 +178,16 @@ func parseProfile(e *colly.HTMLElement) models.Faculty {
 	f.Name = e.ChildAttr("meta[property='og:title']", "content")
 	f.Name = strings.TrimSuffix(f.Name, " - SRMIST")
 	f.Name = strings.TrimSpace(f.Name)
+
+	// Profile image (from Elementor frontend config's featuredImage)
+	e.ForEach("script", func(i int, el *colly.HTMLElement) {
+		if f.ImageURL != "" {
+			return
+		}
+		if m := featuredImageRe.FindStringSubmatch(el.Text); len(m) == 2 {
+			f.ImageURL = strings.ReplaceAll(m[1], `\/`, `/`)
+		}
+	})
 
 	// Info list items (designation, department, phone, email)
 	var listItems []string
