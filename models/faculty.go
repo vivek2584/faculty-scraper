@@ -27,5 +27,3 @@ type Faculty struct {
 	ImageURL         string `json:"image_url,omitempty"`
 	ProfileURL       string `json:"profile_url"`
 }
-
-

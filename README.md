@@ -8,13 +8,13 @@ Go API to scrape faculty info and serve it as JSON payload.
 go run main.go
 ```
 
-server starts on port 8080 by default. set the `PORT` environment variable to change it.
+Server starts on port 8080 by default. Set the `PORT` environment variable to change it.
 
 ## Endpoints
 
 ### Discovery (find department IDs)
 
-find the department ID needed for the faculty listing.
+Find the department ID needed for the faculty listing.
 
 ```
 GET /api/campuses                     -- list all SRM campuses
@@ -27,7 +27,7 @@ GET /api/departments?college_id=9812  -- departments under a college
 ```
 GET /api/department/{id}              -- all faculty slugs in a department
 GET /api/faculty/{slug}               -- full profile for one faculty member
-GET /api/slug?name=Dr. Someone        -- convert a name to a URL slug
+GET /api/search?name=Alice Nithya     -- search faculty by name (returns matching slugs)
 GET /faculty/{slug}                   -- redirect to the SRM profile page
 ```
 
@@ -38,6 +38,7 @@ GET /faculty/{slug}                   -- redirect to the SRM profile page
 3. Pick a college and call `/api/departments?college_id=...` to list departments.
 4. Call `/api/department/{id}` with a department ID to get all faculty slugs.
 5. Call `/api/faculty/{slug}` for any slug to get the full profile JSON.
+6. Use `/api/search?name=...` to find a faculty member by name. The search queries SRM's live staff-finder and returns faculty slugs.
 
 ## Faculty profile fields
 
@@ -51,7 +52,7 @@ The `/api/faculty/{slug}` endpoint returns:
 
 ## Dependencies
 
-- [colly](https://github.com/gocolly/colly) base scraper pkg
+- [colly](https://github.com/gocolly/colly) — base scraper pkg
 
 ## License
 

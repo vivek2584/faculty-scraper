@@ -27,7 +27,7 @@ func main() {
 	fmt.Println("  GET /api/departments?college_id= → list departments for a college")
 	fmt.Println("  GET /api/department/{id}         → faculty slugs in a department")
 	fmt.Println("  GET /api/faculty/{slug}          → full faculty profile JSON")
-	fmt.Println("  GET /api/slug?name=              → convert name to slug")
+	fmt.Println("  GET /api/search?name=            → search faculty by name")
 	fmt.Println("  GET /faculty/{slug}              → redirect to SRM profile page")
 	fmt.Println()
 

@@ -4,13 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"regexp"
-	"strings"
 
 	"github.com/vivek2584/faculty-scraper/scraper"
 )
-
-var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]+`)
 
 const srmFacultyBase = "https://www.srmist.edu.in/faculty/"
 
@@ -21,7 +17,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/departments", handleDepartments)
 	mux.HandleFunc("GET /api/department/{id}", handleDepartment)
 	mux.HandleFunc("GET /api/faculty/{slug}", handleFaculty)
-	mux.HandleFunc("GET /api/slug", handleSlug)
+	mux.HandleFunc("GET /api/search", handleSearch)
 	mux.HandleFunc("GET /faculty/{slug}", handleRedirect)
 }
 
@@ -121,22 +117,27 @@ func handleRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, srmFacultyBase+slug+"/", http.StatusTemporaryRedirect)
 }
 
-// handleSlug converts a faculty name to a URL-friendly slug.
-// GET /api/slug?name={name}
-func handleSlug(w http.ResponseWriter, r *http.Request) {
+// handleSearch searches for faculty by name via SRM's AJAX endpoint.
+// GET /api/search?name=alice+nithya
+func handleSearch(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "missing 'name' query parameter")
 		return
 	}
 
-	slug := strings.ToLower(strings.TrimSpace(name))
-	slug = nonAlphaNum.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
+	log.Printf("Searching faculty: %s", name)
+	slugs, err := scraper.SearchFaculty(name)
+	if err != nil {
+		log.Printf("Error searching %q: %v", name, err)
+		writeError(w, http.StatusBadGateway, "failed to search faculty: "+err.Error())
+		return
+	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
-		"name": name,
-		"slug": slug,
+	writeJSON(w, http.StatusOK, map[string]any{
+		"query": name,
+		"count": len(slugs),
+		"slugs": slugs,
 	})
 }
 

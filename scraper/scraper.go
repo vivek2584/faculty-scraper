@@ -116,6 +116,57 @@ func fetchOptions(action, paramName, paramValue, resultKey string) ([]models.Opt
 var facultyLinkRe = regexp.MustCompile(`href="https://www\.srmist\.edu\.in/faculty/([^"/]+)/"`)
 var featuredImageRe = regexp.MustCompile(`"featuredImage":"([^"]+)"`)
 
+// SearchFaculty queries the SRM staff-finder AJAX endpoint by faculty name
+// and returns matching slugs.
+func SearchFaculty(name string) ([]string, error) {
+	seen := make(map[string]bool)
+	var slugs []string
+
+	for page := 1; ; page++ {
+		body, err := fetchSearchPage(name, page)
+		if err != nil {
+			return nil, fmt.Errorf("search page %d: %w", page, err)
+		}
+
+		matches := facultyLinkRe.FindAllStringSubmatch(body, -1)
+		if len(matches) == 0 {
+			break
+		}
+
+		for _, m := range matches {
+			slug := m[1]
+			if !seen[slug] {
+				seen[slug] = true
+				slugs = append(slugs, slug)
+			}
+		}
+		log.Printf("Faculty search %q page %d: %d slugs so far", name, page, len(slugs))
+	}
+
+	return slugs, nil
+}
+
+// fetchSearchPage calls the SRM staff-finder AJAX endpoint for a name search.
+func fetchSearchPage(name string, page int) (string, error) {
+	data := url.Values{
+		"action":   {"list_faculties_default"},
+		"page":     {strconv.Itoa(page)},
+		"formData": {"faculty=" + name},
+	}
+
+	resp, err := http.Post(ajaxURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // ScrapeDepartmentSlugs discovers all faculty slugs in a department via the
 // SRM staff-finder AJAX endpoint. Returns only slugs — use ScrapeProfile
 // to get the full details for each.
